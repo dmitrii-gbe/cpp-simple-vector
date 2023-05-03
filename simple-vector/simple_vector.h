@@ -38,39 +38,29 @@ public:
     SimpleVector() noexcept = default;
 
     // Создаёт вектор из size элементов, инициализированных значением по умолчанию
-    explicit SimpleVector(size_t size) {
+    explicit SimpleVector(size_t size) : size_(size), capacity_(size) {
         if (size != 0){
             ArrayPtr<Type> tmp(size);
-            for (size_t i = 0; i < size; ++i){
-                tmp[i] = Type{};
-            }
+            std::fill(&tmp[0], &tmp[size], Type{});
             storage_.swap(tmp);
-            size_ = size;
-            capacity_ = size;
         }
     }
 
     // Создаёт вектор из size элементов, инициализированных значением value
-    SimpleVector(size_t size, const Type& value) {
+    SimpleVector(size_t size, const Type& value) : size_(size), capacity_(size) {
         if (size != 0){
             ArrayPtr<Type> tmp(size);
-            for (size_t i = 0; i < size; ++i){
-                tmp[i] = value;
-            }
+            std::fill(&tmp[0], &tmp[size], value);
             storage_.swap(tmp);
-            size_ = size;
-            capacity_ = size;
         }
     }
 
     // Создаёт вектор из std::initializer_list
-    SimpleVector(std::initializer_list<Type> init) {
+    SimpleVector(std::initializer_list<Type> init) : size_(init.size()), capacity_(init.size()) {
         if (init.size() != 0){
             ArrayPtr<Type> tmp(init.size());
             std::copy(init.begin(), init.end(), &tmp[0]);
             this->storage_.swap(tmp);
-            size_ = init.size();
-            capacity_= init.size();
         }
     }
     
@@ -83,16 +73,10 @@ public:
     }
     
     SimpleVector(SimpleVector&& other) {
-        SimpleVector<Type> tmp;
-        for (auto it = other.begin(); it != other.end(); ++it){
-            tmp.PushBack(std::move(*it));
-        }
-        other.Clear();
-        swap(tmp);
+        swap(other);
     }
     
-    SimpleVector (ReserveProxyObj object) {
-        SimpleVector();
+    SimpleVector (ReserveProxyObj object) : SimpleVector() {
         Reserve(object.GetCapacity());
     }
 
@@ -105,17 +89,18 @@ public:
     }
 
     SimpleVector& operator=(SimpleVector&& rhs) {
-        if (this != &rhs){            
-            SimpleVector<Type> tmp(std::move(rhs));        
-            swap(tmp);
+        if (this != &rhs){                
+            swap(rhs);
         }
         return *this;
     }
     
-        void Reserve(size_t new_capacity){
+    void Reserve(size_t new_capacity){
         if (new_capacity > capacity_){
             ArrayPtr<Type> tmp(new_capacity);
-            std::copy(begin(), end(), &tmp[0]);
+            std::move(begin(), end(), &tmp[0]);
+            /*С заменой &tmp[0] на tmp.Get()[0] не проходит проверку в тренажёре. Ошибка "/usr/include/c++/10/bits/stl_algobase.h:400:8: error: invalid type argument of unary ‘*’ (have ‘int’)
+  400 |        *__result = std::move(*__first);"*/
             storage_.swap(tmp);
             capacity_ = new_capacity;
         }
@@ -136,66 +121,39 @@ public:
     // Если перед вставкой значения вектор был заполнен полностью,
     // вместимость вектора должна увеличиться вдвое, а для вектора вместимостью 0 стать равной 1
    Iterator Insert(ConstIterator pos, const Type& value) {
-       if (capacity_ == 0) {
-            ArrayPtr<Type> tmp(1);
-            tmp[0] = value;
-            storage_.swap(tmp);
-            size_ = 1;
-            capacity_ = 1;
-            return begin();
-       }
-       if (size_ < capacity_){
-           auto it = std::copy_backward(const_cast<SimpleVector<Type>::Iterator>(pos), end(), end() + 1);
-           *std::prev(it) = value;
-           ++size_;
-           return std::prev(it);
-       }
-       else {
-          size_t previous_capacity = capacity_;
-          ArrayPtr<Type> tmp(previous_capacity * 2);
-          auto it = std::copy(begin(), const_cast<SimpleVector<Type>::Iterator>(pos), &tmp[0]);
-          *it = value;
-          std::copy(const_cast<SimpleVector<Type>::Iterator>(pos), end(), it + 1);
-          storage_.swap(tmp);
-          ++size_;
-          capacity_ = previous_capacity * 2;
-          return it;
-       }
+       auto it = PrepareArrayForInsertion(pos);
+       *it = value;
+       return it;
     }
-    
-    Iterator Insert(ConstIterator pos, Type&& value) {
-       if (capacity_ == 0) {
-            ArrayPtr<Type> tmp(1);
-            tmp[0] = std::move(value);
-            storage_.swap(tmp);
-            size_ = 1;
-            capacity_ = 1;
-            return begin();
-       }
+
+   Iterator Insert(ConstIterator pos, Type&& value) {
+       auto it = PrepareArrayForInsertion(pos);
+       *it = std::move(value);
+       return it;
+    }
+
+   Iterator PrepareArrayForInsertion(ConstIterator pos){
        if (size_ < capacity_){
            auto it = std::move_backward(const_cast<SimpleVector<Type>::Iterator>(pos), end(), end() + 1);
-           *std::prev(it) = std::move(value);
            ++size_;
            return std::prev(it);
        }
        else {
           size_t previous_capacity = capacity_;
-          ArrayPtr<Type> tmp(previous_capacity * 2);
+          ArrayPtr<Type> tmp(std::max(previous_capacity * 2, static_cast<size_t>(1)));
           auto it = std::move(begin(), const_cast<SimpleVector<Type>::Iterator>(pos), &tmp[0]);
-          *it = std::move(value);
           std::move(const_cast<SimpleVector<Type>::Iterator>(pos), end(), it + 1);
           storage_.swap(tmp);
           ++size_;
-          capacity_ = previous_capacity * 2;
+          capacity_ = std::max(previous_capacity * 2, static_cast<size_t>(1));
           return it;
        }
     }
 
     // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
     void PopBack() noexcept {
-        if (size_ != 0){
+        assert(size_ > 0);
             --size_;
-        }
     }
 
     //Удаляет элемент вектора в указанной позиции
@@ -268,24 +226,21 @@ public:
     // Изменяет размер массива.
     // При увеличении размера новые элементы получают значение по умолчанию для типа Type
     void Resize(size_t new_size) {
+        size_t previous_size = size_;
         if (new_size <= size_){
             size_ = new_size;
         }
         else if (new_size <= capacity_ && new_size > size_) {
-            for (auto it = begin() + size_; it != begin() + new_size; ++it){
-                *it = std::move(Type{});
-            }
             size_ = new_size;
         }
         else {
-            ArrayPtr<Type> tmp(std::max(new_size, capacity_ * 2));
-            std::move(begin(), end(), &tmp[0]);
-            storage_.swap(tmp);
-            for (auto it = begin() + size_; it != begin() + std::max(new_size, capacity_ * 2); ++it){
+            Reserve(std::max(new_size, capacity_ * 2));
+            size_ = new_size;
+        }
+        if (size_ > previous_size){
+            for (auto it = begin() + previous_size; it != end(); ++it){
                 *it = std::move(Type{});
             }
-            size_ = new_size;
-            capacity_ = std::max(new_size, capacity_ * 2);
         }
     }
 
@@ -339,7 +294,7 @@ inline bool operator==(const SimpleVector<Type>& lhs, const SimpleVector<Type>& 
 
 template <typename Type>
 inline bool operator!=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return !std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+    return !(lhs == rhs);
 }
 
 template <typename Type>
@@ -349,15 +304,15 @@ inline bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& r
 
 template <typename Type>
 inline bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return (lhs < rhs) || (lhs == rhs);
+    return !(lhs > rhs);
 }
 
 template <typename Type>
 inline bool operator>(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return !(lhs <= rhs);
+    return rhs < lhs;
 }
 
 template <typename Type>
 inline bool operator>=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return !(lhs < rhs);
+    return rhs <= lhs;
 }

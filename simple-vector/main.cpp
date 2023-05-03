@@ -150,6 +150,15 @@ void TestNoncopiableErase() {
     cout << "Done!"s << endl << endl;
 }
 
+void TestEmptyPushBack(){
+    cout << "TestEmptyPushBack" << endl;
+    SimpleVector<int> v;
+    int a = 10;
+    for (int i = 0; i < a; ++i){
+        v.PushBack(i);
+    }
+    cout << "Done!" << endl;
+}
 int main() {
     TestTemporaryObjConstructor();
     TestTemporaryObjOperator();
@@ -159,5 +168,6 @@ int main() {
     TestNoncopiablePushBack();
     TestNoncopiableInsert();
     TestNoncopiableErase();
+    TestEmptyPushBack();
     return 0;
 }

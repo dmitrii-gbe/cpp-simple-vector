@@ -9,37 +9,46 @@ public:
 
     // Создаёт в куче массив из size элементов типа Type.
     // Если size == 0, поле raw_ptr_ должно быть равно nullptr
-    explicit ArrayPtr(size_t size) {
-        if (size == 0){
-            raw_ptr_ = nullptr;
-        }
-        else {
-            auto ptr = new Type[size];
-            raw_ptr_ = ptr;
-        }
-        
+    explicit ArrayPtr(size_t size) : raw_ptr_(size == 0 ? nullptr : new Type[size]) {
     }
 
     // Конструктор из сырого указателя, хранящего адрес массива в куче либо nullptr
-    explicit ArrayPtr(Type* raw_ptr) noexcept {
-        raw_ptr_ = raw_ptr;
+    explicit ArrayPtr(Type* raw_ptr) noexcept : raw_ptr_(raw_ptr) {
     }
 
-    // Запрещаем копирование
-    ArrayPtr(const ArrayPtr&) = delete;
+    ArrayPtr(const ArrayPtr& other) {
+        Type* tmp = new Type[other.size()];
+        std::fill(other.begin(), other.end(), &tmp[0]);
+        swap(tmp);
+    }
+
+    ArrayPtr(ArrayPtr&& other) {
+        swap(other);
+    }
 
     ~ArrayPtr() {
         delete[] raw_ptr_;
     }
 
     // Запрещаем присваивание
-    ArrayPtr& operator=(const ArrayPtr&) = delete;
+    ArrayPtr& operator=(const ArrayPtr& rhs) {
+        if (this != &rhs){
+            Type* tmp(rhs);
+            swap(tmp);
+        }
+    }
+
+    ArrayPtr& operator=(ArrayPtr&& rhs) {
+        if (this != &rhs){
+            swap(rhs);
+            return *this;
+        }
+    }
 
     // Прекращает владением массивом в памяти, возвращает значение адреса массива
     // После вызова метода указатель на массив должен обнулиться
     [[nodiscard]] Type* Release() noexcept {
-        auto ptr = raw_ptr_;
-        raw_ptr_ = nullptr;
+        auto ptr = std::exchange(raw_ptr_, nullptr);
         return ptr;
     }
 
@@ -55,12 +64,7 @@ public:
 
     // Возвращает true, если указатель ненулевой, и false в противном случае
     explicit operator bool() const {
-        if (raw_ptr_ == nullptr){
-            return false;
-        }
-        else {
-            return true;
-        }
+        return raw_ptr_ != nullptr;
     }
 
     // Возвращает значение сырого указателя, хранящего адрес начала массива
