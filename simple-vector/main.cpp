@@ -159,6 +159,24 @@ void TestEmptyPushBack(){
     }
     cout << "Done!" << endl;
 }
+
+void TestResize(){
+    cout << "TestResize"s << endl;
+    SimpleVector<X> v;
+    for (int i = 0; i < 10; ++i){
+        v.PushBack(X(i));
+    }
+    for (auto it = v.begin(); it != v.end(); ++it){
+        cout << (*it).GetX() << " "s;
+    }
+    cout << endl;
+    v.Resize(20);
+    assert(v.GetSize() == 20);
+    for (auto it = v.begin(); it != v.end(); ++it){
+        cout << (*it).GetX() << " "s;
+    }
+    cout << endl;
+}
 int main() {
     TestTemporaryObjConstructor();
     TestTemporaryObjOperator();
@@ -169,5 +187,6 @@ int main() {
     TestNoncopiableInsert();
     TestNoncopiableErase();
     TestEmptyPushBack();
+    TestResize();
     return 0;
 }

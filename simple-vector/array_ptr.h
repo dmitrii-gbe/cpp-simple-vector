@@ -16,11 +16,7 @@ public:
     explicit ArrayPtr(Type* raw_ptr) noexcept : raw_ptr_(raw_ptr) {
     }
 
-    ArrayPtr(const ArrayPtr& other) {
-        Type* tmp = new Type[other.size()];
-        std::fill(other.begin(), other.end(), &tmp[0]);
-        swap(tmp);
-    }
+    ArrayPtr(const ArrayPtr& other) = delete;
 
     ArrayPtr(ArrayPtr&& other) {
         swap(other);
@@ -31,12 +27,7 @@ public:
     }
 
     // Запрещаем присваивание
-    ArrayPtr& operator=(const ArrayPtr& rhs) {
-        if (this != &rhs){
-            Type* tmp(rhs);
-            swap(tmp);
-        }
-    }
+    ArrayPtr& operator=(const ArrayPtr& rhs) = delete;
 
     ArrayPtr& operator=(ArrayPtr&& rhs) {
         if (this != &rhs){
